@@ -263,10 +263,7 @@ void WebServer::add_html_file(const char *filename) {
   std::string s = filename;
   size_t pos = s.find(delimiter);
   s.erase(0, pos);  // + delimiter.length());
-  ESP_LOGE(TAG, "File name: %s", s.c_str());
   html_files_list_.push_back(s);
-  // for (int i = 0; i < html_files_list_.size(); i++)
-  //   ESP_LOGE(TAG, "%d: File name: %s", i, html_files_list_.at(i).c_str());
 }
 
 void WebServer::set_dashboard_url(const char *dashboard_url) { this->dashboard_url_ = dashboard_url; }
