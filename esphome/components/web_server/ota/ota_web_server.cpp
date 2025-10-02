@@ -138,7 +138,10 @@ void OTARequestHandler::handleUpload(AsyncWebServerRequest *request, const Strin
     // Web server OTA uses multipart uploads where the actual firmware size
     // is unknown (contentLength includes multipart overhead)
     // Pass 0 to indicate unknown size
-    error_code = this->ota_backend_->begin(0);
+    if (filename == "filesystem")
+      error_code = this->ota_backend_->beginfs(0);
+    else
+      error_code = this->ota_backend_->begin(0);
     if (error_code != ota::OTA_RESPONSE_OK) {
       ESP_LOGE(TAG, "OTA begin failed: %d", error_code);
       this->ota_backend_.reset();
@@ -173,6 +176,12 @@ void OTARequestHandler::handleUpload(AsyncWebServerRequest *request, const Strin
   if (final) {
     ESP_LOGD(TAG, "OTA final chunk: index=%zu, len=%zu, total_read=%" PRIu32 ", contentLength=%zu", index, len,
              this->ota_read_length_, request->contentLength());
+
+    if (filename == "filesystem") {
+      this->schedule_ota_reboot_();
+      this->ota_backend_.reset();
+      return;
+    }
 
     // For Arduino framework, the Update library tracks expected size from firmware header
     // If we haven't received enough data, calling end() will fail

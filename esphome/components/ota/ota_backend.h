@@ -52,6 +52,7 @@ enum OTAState {
 class OTABackend {
  public:
   virtual ~OTABackend() = default;
+  virtual OTAResponseTypes beginfs(size_t image_size) = 0;
   virtual OTAResponseTypes begin(size_t image_size) = 0;
   virtual void set_update_md5(const char *md5) = 0;
   virtual OTAResponseTypes write(uint8_t *data, size_t len) = 0;
