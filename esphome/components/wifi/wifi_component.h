@@ -224,6 +224,23 @@ class WiFiComponent : public Component {
    */
   void set_ap(const WiFiAP &ap);
   WiFiAP get_ap() { return this->ap_; }
+
+  /** Add function to bring WiFi AP up even if WiFi STA is connected
+   *
+   * Usage:
+   *
+   * esphome:
+   *  name: $name
+   *  friendly_name: $friendly_name
+   *  on_boot:
+   *    - priority: 200.0
+   *      then:
+   *        - logger.log: "Starting AP..."
+   *        - lambda: |-
+   *            wifi_id->start_ap();
+   *
+   */
+  void start_ap() { setup_ap_config_(); }
 #endif  // USE_WIFI_AP
 
   void enable();
