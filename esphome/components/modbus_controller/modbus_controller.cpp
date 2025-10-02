@@ -112,6 +112,8 @@ void ModbusController::on_modbus_read_registers(uint8_t function_code, uint16_t 
            "0x%X.",
            this->address_, function_code, start_address, number_of_registers);
 
+  func_code = function_code;
+
   std::vector<uint16_t> sixteen_bit_response;
   for (uint16_t current_address = start_address; current_address < start_address + number_of_registers;) {
     bool found = false;
