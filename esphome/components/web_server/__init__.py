@@ -146,8 +146,9 @@ FINAL_VALIDATE_SCHEMA = _final_validate_sorting
 def validate_html_file(value):
     # html_files_path
     # Uncomment next line to check that file exists in dir
-    value = cv.file_("data/" + value)
-    _, ext = os.path.splitext(value)
+    value = "data/" + value
+    file = cv.file_(value)
+    _, ext = os.path.splitext(file)
     if ext not in VALID_INCLUDE_EXTS:
         raise cv.Invalid(
             f"Include has invalid file extension {ext} - valid extensions are {', '.join(VALID_INCLUDE_EXTS)}"
@@ -192,10 +193,10 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_CSS_INCLUDE): cv.file_,
             cv.Optional(CONF_JS_URL): cv.string,
             cv.Optional(CONF_JS_INCLUDE): cv.file_,
+            cv.Optional(CONF_HTML_FILES_PATH, default="data/"): cv.string,
             cv.Optional(CONF_HTML_FILES, default=[]): cv.ensure_list(
                 validate_html_file
             ),
-            cv.Optional(CONF_HTML_FILES_PATH, default="data/"): cv.string,
             cv.Optional(CONF_ENABLE_PRIVATE_NETWORK_ACCESS, default=True): cv.boolean,
             cv.Optional(CONF_AUTH): cv.Schema(
                 {
@@ -349,7 +350,7 @@ async def to_code(config):
 
     if config[CONF_HTML_FILES]:
         for html_file in config[CONF_HTML_FILES]:
-            cg.add(var.add_html_file(html_file))
+            cg.add(var.add_html_file(str(html_file)))
 
 
 def FILTER_SOURCE_FILES() -> list[str]:

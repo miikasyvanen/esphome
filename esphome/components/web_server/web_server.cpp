@@ -263,7 +263,10 @@ void WebServer::add_html_file(const char *filename) {
   std::string s = filename;
   size_t pos = s.find(delimiter);
   s.erase(0, pos);  // + delimiter.length());
+  ESP_LOGE(TAG, "File name: %s", s.c_str());
   html_files_list_.push_back(s);
+  // for (int i = 0; i < html_files_list_.size(); i++)
+  //   ESP_LOGE(TAG, "%d: File name: %s", i, html_files_list_.at(i).c_str());
 }
 
 void WebServer::set_dashboard_url(const char *dashboard_url) { this->dashboard_url_ = dashboard_url; }
@@ -1891,7 +1894,10 @@ bool WebServer::canHandle(AsyncWebServerRequest *request) const {
   const auto method = request->method();
 
   // Custom URL checks
-#ifdef USE_CUSTOM_WEBPAGE
+#ifndef USE_CUSTOM_WEBPAGE
+  if (url == dashboard_url_)
+    return true;
+#else
   if (url == "/")
     return true;
 
@@ -2030,7 +2036,12 @@ void WebServer::handleRequest(AsyncWebServerRequest *request) {
   const auto &url = request->url();
 
   // Handle custom routes first
-#ifdef USE_CUSTOM_WEBPAGE
+#ifndef USE_CUSTOM_WEBPAGE
+  if (url == dashboard_url_) {
+    this->handle_index_request(request);
+    return;
+  }
+#else
   if (url == "/") {
     this->handle_custom_request(request);
     return;
