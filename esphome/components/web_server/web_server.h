@@ -1,6 +1,7 @@
 #pragma once
 
 #include "list_entities.h"
+#include "esp_littlefs.h"
 
 #include "esphome/components/web_server_base/web_server_base.h"
 #ifdef USE_WEBSERVER
@@ -70,6 +71,17 @@ struct SortingGroup {
   float weight;
 };
 #endif
+
+/* Scratch buffer size */
+#define SCRATCH_BUFSIZE 8192
+#define ESP_VFS_PATH_MAX 256
+struct file_server_data {
+  /* Base path of file storage */
+  char base_path[ESP_VFS_PATH_MAX + 1];
+
+  /* Scratch buffer for temporary storage during file transfer */
+  char scratch[SCRATCH_BUFSIZE];
+};
 
 enum JsonDetail { DETAIL_ALL, DETAIL_STATE };
 
@@ -171,6 +183,9 @@ class WebServer : public Controller, public Component, public AsyncWebHandler {
  public:
   WebServer(web_server_base::WebServerBase *base);
 
+  void add_html_file(const char *filename);
+  void set_dashboard_url(const char *dashboard_url);
+
 #if USE_WEBSERVER_VERSION == 1
   /** Set the URL to the CSS <link> that's sent to each client. Defaults to
    * https://oi.esphome.io/v1/webserver-v1.min.css
@@ -225,6 +240,9 @@ class WebServer : public Controller, public Component, public AsyncWebHandler {
 
   /// MQTT setup priority.
   float get_setup_priority() const override;
+
+  /// Handle custom requests
+  void handle_custom_request(AsyncWebServerRequest *request);
 
   /// Handle an index request under '/'.
   void handle_index_request(AsyncWebServerRequest *request);
@@ -565,6 +583,9 @@ class WebServer : public Controller, public Component, public AsyncWebHandler {
 #ifdef USE_ESP_IDF
   AsyncEventSource events_{"/events", this};
 #endif
+
+  std::vector<std::string> html_files_list_;
+  const char *dashboard_url_{nullptr};
 
 #if USE_WEBSERVER_VERSION == 1
   const char *css_url_{nullptr};

@@ -185,6 +185,61 @@ std::string AsyncWebServerRequest::url() const {
 
 std::string AsyncWebServerRequest::host() const { return this->get_header("Host").value(); }
 
+#define IS_FILE_EXT(filename, ext) (strcasecmp(&filename[strlen(filename) - sizeof(ext) + 1], ext) == 0)
+#define GET_FILE_EXT(filename, ext) (strcasecmp(&filename[strlen(filename) - sizeof(ext) + 1], ext) == 0)
+#define GET_FILENAME(filename) (strcasecmp(&filename[strlen(filename) - sizeof(ext) + 1], ext) == 0)
+
+/* Set HTTP response content type according to file extension */
+esp_err_t AsyncWebServerRequest::set_content_type_from_file(AsyncWebServerRequest *request, const char *filename) {
+  if (IS_FILE_EXT(filename, ".pdf")) {
+    ESP_LOGI(TAG, "File %s type: application/pdf", filename);
+    return httpd_resp_set_type(*this, "application/pdf");
+  } else if (IS_FILE_EXT(filename, ".html")) {
+    ESP_LOGI(TAG, "File %s type: text/html", filename);
+    return httpd_resp_set_type(*this, "text/html");
+  } else if (IS_FILE_EXT(filename, ".css")) {
+    ESP_LOGI(TAG, "File %s type: text/css", filename);
+    return httpd_resp_set_type(*this, "text/css");
+  } else if (IS_FILE_EXT(filename, ".js")) {
+    ESP_LOGI(TAG, "File %s type: text/javascript", filename);
+    return httpd_resp_set_type(*this, "text/javascript");
+  } else if (IS_FILE_EXT(filename, ".jpeg")) {
+    ESP_LOGI(TAG, "File %s type: image/jpeg", filename);
+    return httpd_resp_set_type(*this, "image/jpeg");
+  } else if (IS_FILE_EXT(filename, ".ico")) {
+    ESP_LOGI(TAG, "File %s type: image/x-icon", filename);
+    return httpd_resp_set_type(*this, "image/x-icon");
+  } else {
+    /* This is a limited set only */
+    /* For any other type always set as plain text */
+    ESP_LOGI(TAG, "File type: text/plain");
+    return httpd_resp_set_type(*this, "text/plain");
+  }
+}
+
+esp_err_t AsyncWebServerRequest::sendChunk(AsyncWebServerRequest *request, const char *chunk, size_t chunksize) {
+  // httpd_resp_send(*this, response->get_content_data(), response->get_content_size());
+  if (chunksize > 0) {
+    /* Send the buffer contents as HTTP response chunk */
+    if (httpd_resp_send_chunk(*this, chunk, chunksize) != ESP_OK) {
+      // fclose(fd);
+      ESP_LOGE(TAG, "Chunk sending failed!");
+      /* Abort sending file */
+      httpd_resp_sendstr_chunk(*this, NULL);
+      /* Respond with 500 Internal Server Error */
+      httpd_resp_send_err(*this, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to send file");
+      return ESP_FAIL;
+    }
+  } else {
+/* Respond with an empty chunk to signal HTTP response completion */
+#ifdef CONFIG_HTTPD_CONN_CLOSE_HEADER
+    httpd_resp_set_hdr(*this, "Connection", "close");
+#endif
+    httpd_resp_send_chunk(*this, NULL, 0);
+  }
+  return ESP_OK;
+}
+
 void AsyncWebServerRequest::send(AsyncWebServerResponse *response) {
   httpd_resp_send(*this, response->get_content_data(), response->get_content_size());
 }
