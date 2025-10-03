@@ -262,7 +262,7 @@ void WebServer::add_html_file(const char *filename) {
   std::string delimiter = "/";
   std::string s = filename;
   size_t pos = s.find(delimiter);
-  s.erase(0, pos);  // + delimiter.length());
+  s.erase(0, pos);
   html_files_list_.push_back(s);
 }
 
