@@ -5,6 +5,7 @@ from esphome.config_helpers import filter_source_files_from_platform
 import esphome.config_validation as cv
 from esphome.const import (
     CONF_ID,
+    CONF_MODE,
     PLATFORM_BK72XX,
     PLATFORM_ESP32,
     PLATFORM_ESP8266,
@@ -29,12 +30,21 @@ CODEOWNERS = ["@esphome/core"]
 captive_portal_ns = cg.esphome_ns.namespace("captive_portal")
 CaptivePortal = captive_portal_ns.class_("CaptivePortal", cg.Component)
 
+mode = captive_portal_ns.enum("Mode")
+Modes = {
+    "ALWAYS_ACTIVE": mode.MODE_ALWAYS_ACTIVE,
+    "AP_ONLY": mode.MODE_AP_ONLY,
+}
+
 CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(CaptivePortal),
             cv.GenerateID(CONF_WEB_SERVER_BASE_ID): cv.use_id(
                 web_server_base.WebServerBase
+            ),
+            cv.Optional(CONF_MODE, default="AP_ONLY"): cv.enum(
+                Modes, upper=True, space="_"
             ),
         }
     ).extend(cv.COMPONENT_SCHEMA),
@@ -67,6 +77,8 @@ async def to_code(config):
             cg.add_library("DNSServer", None)
         if CORE.is_libretiny:
             cg.add_library("DNSServer", None)
+
+    cg.add(var.setMode(config[CONF_MODE]))
 
 
 # Only compile the ESP-IDF DNS server when using ESP-IDF framework
