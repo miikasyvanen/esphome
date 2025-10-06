@@ -600,6 +600,8 @@ class WebServer : public Controller, public Component, public AsyncWebHandler {
   bool expose_log_{true};
 };
 
+extern WebServer *global_web_server;  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
 }  // namespace web_server
 }  // namespace esphome
 #endif

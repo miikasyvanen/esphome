@@ -34,6 +34,10 @@
 #endif
 #endif
 
+#ifdef USE_CAPTIVE_PORTAL
+#include "esphome/components/captive_portal/captive_portal.h"
+#endif
+
 namespace esphome {
 namespace web_server {
 
@@ -297,6 +301,7 @@ std::string WebServer::get_config_json() {
 }
 
 void WebServer::setup() {
+  global_web_server = this;
   this->setup_controller(this->include_internal_);
   this->base_->init();
 
@@ -1935,6 +1940,12 @@ bool WebServer::canHandle(AsyncWebServerRequest *request) const {
     return true;
 #endif
 
+#ifdef USE_CAPTIVE_PORTAL
+  if (captive_portal::global_captive_portal->canHandle(request)) {
+    return true;
+  }
+#endif
+
   // Parse URL for component checks
   UrlMatch match = match_url(url.c_str(), url.length(), true);
   if (!match.valid)
@@ -2071,6 +2082,19 @@ void WebServer::handleRequest(AsyncWebServerRequest *request) {
   }
 #endif
 
+#ifdef USE_CAPTIVE_PORTAL
+  if (request->url() == captive_portal::global_captive_portal->getCaptivePortalPath()) {
+    captive_portal::global_captive_portal->handleRequest(request);
+    return;
+  } else if (request->url() == "/wifisave") {
+    captive_portal::global_captive_portal->handle_wifisave(request);
+    return;
+  } else if (request->url() == "/config.json") {
+    captive_portal::global_captive_portal->handle_config(request);
+    return;
+  }
+#endif
+
 #ifdef USE_WEBSERVER_CSS_INCLUDE
   if (url == "/0.css") {
     this->handle_css_request(request);
@@ -2196,6 +2220,8 @@ void WebServer::add_sorting_group(uint64_t group_id, const std::string &group_na
   this->sorting_groups_[group_id] = SortingGroup{group_name, weight};
 }
 #endif
+
+WebServer *global_web_server = nullptr;  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 }  // namespace web_server
 }  // namespace esphome
