@@ -16,6 +16,8 @@ namespace modbus_controller {
 
 class ModbusController;
 
+static uint8_t func_code = 0;
+
 enum class ModbusFunctionCode {
   CUSTOM = 0x00,
   READ_COILS = 0x01,
