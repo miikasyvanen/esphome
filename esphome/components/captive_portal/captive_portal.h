@@ -14,7 +14,6 @@
 #include "esphome/components/web_server_base/web_server_base.h"
 
 namespace esphome {
-
 namespace captive_portal {
 
 const char WEB_SERVER_CAPTIVE_PORTAL_PATH[] = "/captive_portal";
