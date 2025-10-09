@@ -119,12 +119,7 @@ void WiFiComponent::start() {
     }
 #endif
 #ifdef USE_WIFI_AP
-#ifdef USE_WIFI_AP_MODE_ALWAYS_ACTIVE
   } else if (this->has_ap()) {
-#else
-  }
-  if (this->has_ap()) {
-#endif
     this->start_ap();
 #endif  // USE_WIFI_AP
   }
@@ -135,6 +130,14 @@ void WiFiComponent::start() {
   }
 #endif
   this->wifi_apply_hostname_();
+
+#ifdef USE_WIFI_AP
+#ifdef USE_WIFI_AP_MODE_ALWAYS_ACTIVE
+  ESP_LOGE(TAG, "WiFi AP mode ALWAYS_ACTIVE");
+#else
+  ESP_LOGE(TAG, "WiFi AP mode not always active");
+#endif
+#endif
 }
 
 void WiFiComponent::restart_adapter() {
@@ -216,7 +219,11 @@ void WiFiComponent::loop() {
     }
 
 #ifdef USE_WIFI_AP
+#ifdef USE_WIFI_AP_MODE_ALWAYS_ACTIVE
+    if (!this->ap_active_) {
+#else
     if (!this->ap_active_ && this->ap_timeout_ != 0 && (now - this->last_connected_ > this->ap_timeout_)) {
+#endif
       this->start_ap();
     }
 #endif  // USE_WIFI_AP
@@ -315,12 +322,12 @@ void WiFiComponent::start_ap() {
     return;
   }
   if (this->ap_active_) {
-    ESP_LOGD(TAG, "Ap seems to be started already...");
+    ESP_LOGD(TAG, "AP seems to be started already...");
     return;
   }
 
-  ESP_LOGI(TAG, "Starting fallback AP!");
-  ESP_LOGI(TAG, "Starting AP...");
+  ESP_LOGE(TAG, "Starting fallback AP!");
+  ESP_LOGE(TAG, "Starting AP...");
 
   this->wifi_mode_({}, true);
   this->ap_setup_ = this->wifi_start_ap_(this->ap_);
