@@ -80,6 +80,8 @@ async def to_code(config):
 
     if CONF_MODE in config:
         cg.add(var.setMode(config[CONF_MODE]))
+        if config[CONF_MODE] == "ALWAYS_ACTIVE":
+            cg.add_define("USE_CAPTIVE_PORTAL_MODE_ALWAYS_ACTIVE")
 
 
 # Only compile the ESP-IDF DNS server when using ESP-IDF framework

@@ -5,9 +5,6 @@
 #include "esphome/components/wifi/wifi_component.h"
 #include "captive_index.h"
 
-#include "esphome/components/web_server/web_server.h"
-// esphome::web_server::WebServer *web_server;
-
 namespace esphome {
 namespace captive_portal {
 
@@ -117,32 +114,7 @@ void CaptivePortal::start(const String portal_path) {
 
   ESP_LOGV(TAG, "Captive portal started");
 }
-/*
-void CaptivePortal::handleRequest(AsyncWebServerRequest *req) {
-  if (req->url() == F("/config.json")) {
-    this->handle_config(req);
-    return;
-  } else if (req->url() == F("/wifisave")) {
-    this->handle_wifisave(req);
-    return;
-  }
 
-  // All other requests get the captive portal page
-  // This includes OS captive portal detection endpoints which will trigger
-  // the captive portal when they don't receive their expected responses
-  if (req->url() == F("/fallback")) {
-#ifndef USE_ESP8266
-    auto *response = req->beginResponse(200, F("text/html"), INDEX_GZ, sizeof(INDEX_GZ));
-#else
-    auto *response = req->beginResponse_P(200, F("text/html"), INDEX_GZ, sizeof(INDEX_GZ));
-#endif
-    response->addHeader(F("Content-Encoding"), F("gzip"));
-    req->send(response);
-  } else {
-    web_server::global_web_server->handleRequest(req);
-  }
-}
-*/
 void CaptivePortal::end() {
   ESP_LOGV(TAG, "Ending Captive Portal...");
 

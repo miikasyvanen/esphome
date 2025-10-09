@@ -16,7 +16,7 @@
 namespace esphome {
 namespace captive_portal {
 
-const char WEB_SERVER_CAPTIVE_PORTAL_PATH[] = "/captive_portal";
+const char WEB_SERVER_CAPTIVE_PORTAL_PATH[] = "/fallback";
 
 enum Mode { MODE_ALWAYS_ACTIVE, MODE_AP_ONLY };
 

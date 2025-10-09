@@ -154,7 +154,7 @@ WIFI_NETWORK_BASE = cv.Schema(
 mode = wifi_ns.enum("Mode")
 Modes = {
     "ALWAYS_ACTIVE": mode.MODE_ALWAYS_ACTIVE,
-    "FALLBACK": mode.MODE_AP_ONLY,
+    "FALLBACK": mode.MODE_FALLBACK,
 }
 
 CONF_AP_TIMEOUT = "ap_timeout"
@@ -407,8 +407,10 @@ async def to_code(config):
         )
         cg.add(var.set_ap_timeout(conf[CONF_AP_TIMEOUT]))
         cg.add_define("USE_WIFI_AP")
-        if CONF_MODE in config:
-            cg.add(var.setMode(config[CONF_MODE]))
+        if CONF_MODE in conf:
+            cg.add(var.setMode(conf[CONF_MODE]))
+            if conf[CONF_MODE] == "ALWAYS_ACTIVE":
+                cg.add_define("USE_WIFI_AP_MODE_ALWAYS_ACTIVE")
 
     elif CORE.is_esp32 and CORE.using_esp_idf:
         add_idf_sdkconfig_option("CONFIG_ESP_WIFI_SOFTAP_SUPPORT", False)
