@@ -119,7 +119,12 @@ void WiFiComponent::start() {
     }
 #endif
 #ifdef USE_WIFI_AP
+#ifdef USE_WIFI_AP_MODE_ALWAYS_ACTIVE
   } else if (this->has_ap()) {
+#else
+  }
+  if (this->has_ap()) {
+#endif
     this->start_ap();
 #endif  // USE_WIFI_AP
   }

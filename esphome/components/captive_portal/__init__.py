@@ -78,7 +78,8 @@ async def to_code(config):
         if CORE.is_libretiny:
             cg.add_library("DNSServer", None)
 
-    cg.add(var.setMode(config[CONF_MODE]))
+    if CONF_MODE in config:
+        cg.add(var.setMode(config[CONF_MODE]))
 
 
 # Only compile the ESP-IDF DNS server when using ESP-IDF framework

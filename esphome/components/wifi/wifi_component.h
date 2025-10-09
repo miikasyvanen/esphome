@@ -52,6 +52,8 @@ extern "C" {
 namespace esphome {
 namespace wifi {
 
+enum Mode { MODE_ALWAYS_ACTIVE, MODE_FALLBACK };
+
 struct SavedWifiSettings {
   char ssid[33];
   char password[65];
@@ -213,6 +215,8 @@ class WiFiComponent : public Component {
   WiFiAP get_sta() { return this->selected_ap_; }
   void add_sta(const WiFiAP &ap);
   void clear_sta();
+  void setMode(Mode _mode) { this->mode = _mode; }
+  Mode mode{MODE_FALLBACK};
 
 #ifdef USE_WIFI_AP
   /** Setup an Access Point that should be created if no connection to a station can be made.
