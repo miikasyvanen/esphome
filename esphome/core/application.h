@@ -86,6 +86,9 @@
 #ifdef USE_UPDATE
 #include "esphome/components/update/update_entity.h"
 #endif
+#ifdef USE_STORAGE
+#include "esphome/components/storage/storage.h"
+#endif
 
 namespace esphome {
 
@@ -209,6 +212,9 @@ class Application {
 
 #ifdef USE_UPDATE
   void register_update(update::UpdateEntity *update) { this->updates_.push_back(update); }
+#endif
+#ifdef USE_STORAGE
+  void register_storage(storage::Storage *storage) { this->storages_.push_back(storage); }
 #endif
 
   /// Reserve space for components to avoid memory fragmentation
@@ -409,6 +415,10 @@ class Application {
   auto &get_updates() const { return this->updates_; }
   GET_ENTITY_METHOD(update::UpdateEntity, update, updates)
 #endif
+#ifdef USE_STORAGE
+  auto &get_storagess() const { return this->storages_; }
+  GET_ENTITY_METHOD(storage::Storage, storage, storages)
+#endif
 
   Scheduler scheduler;
 
@@ -585,6 +595,9 @@ class Application {
 #endif
 #ifdef USE_UPDATE
   StaticVector<update::UpdateEntity *, ESPHOME_ENTITY_UPDATE_COUNT> updates_{};
+#endif
+#ifdef USE_STORAGE
+  StaticVector<storage::Storage *, ESPHOME_ENTITY_STORAGE_COUNT> storages_{};
 #endif
 };
 

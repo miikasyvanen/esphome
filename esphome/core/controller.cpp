@@ -129,6 +129,12 @@ void Controller::setup_controller(bool include_internal) {
       obj->add_on_state_callback([this, obj]() { this->on_update(obj); });
   }
 #endif
+#ifdef USE_STORAGE
+  for (auto *obj : App.get_storages()) {
+    if (include_internal || !obj->is_internal())
+      obj->add_on_state_callback([this, obj]() { this->on_storage(obj); });
+  }
+#endif
 }
 
 }  // namespace esphome
