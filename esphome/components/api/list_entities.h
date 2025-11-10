@@ -88,9 +88,6 @@ class ListEntitiesIterator : public ComponentIterator {
 #ifdef USE_UPDATE
   bool on_update(update::UpdateEntity *entity) override;
 #endif
-#ifdef USE_STORAGE
-  bool on_storage(storage::Storage *storage) override;
-#endif
   bool on_end() override;
   bool completed() { return this->state_ == IteratorState::NONE; }
 

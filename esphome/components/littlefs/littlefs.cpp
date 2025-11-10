@@ -12,19 +12,23 @@ void LittleFS::setup() {}
 
 void LittleFS::loop() {}
 
-bool LittleFS::mount_partition(std::string partition) {
+bool LittleFS::mount_partition(std::string partition, std::string label) {
   esp_err_t ret = ESP_FAIL;
 
-  const char *p_label = partition.c_str();
-  partition.insert(0, 1, '/');
+  const char *p_label = label.c_str();
+
+  if (partition.at(0) != '/')
+    partition.insert(0, 1, '/');
   const char *p_path = partition.c_str();
 
   if (esp_littlefs_mounted(p_label)) {
-    ESP_LOGI(TAG, "LittleFS partition already mounted!");
+    ESP_LOGE(TAG, "LittleFS partition already mounted!");
   }
 
   // Initialize LittleFS
   ESP_LOGI(TAG, "Mounting LittleFS partition");
+
+  ESP_LOGI(TAG, "Mounting LittleFS partition %s with label %s", p_path, p_label);
 
   esp_vfs_littlefs_conf_t conf = {
       .base_path = p_path,
@@ -59,7 +63,7 @@ bool LittleFS::mount_partition(std::string partition) {
   return ret;
 }
 
-bool LittleFS::format_partition(std::string partition) {
+bool LittleFS::format_partition(std::string partition, std::string label) {
   esp_err_t ret = ESP_FAIL;
 
   const char *p_label = partition.c_str();
@@ -69,17 +73,24 @@ bool LittleFS::format_partition(std::string partition) {
   return ret;
 }
 
-bool LittleFS::open_file(std::string filename, FILE *file) {
+bool LittleFS::open_file(std::string filename, FILE **file) {
   esp_err_t ret = ESP_FAIL;
 
-  const char *fname = filename.c_str();
+  // const char *fname = filename.c_str();
 
-  ESP_LOGI(TAG, "Opening file: %s", filename);
-  file = fopen(fname, "r");
+  uint8_t filename_len = strlen("/littlefs") + strlen(filename.c_str()) + 1;
+  char fname[filename_len];
+  // filename = (char*)malloc(filename_len);
+  strcpy(fname, "/littlefs");
+  strcat(fname, filename.c_str());
+
+  ESP_LOGI(TAG, "Opening file: %s", fname);
+  *file = fopen(fname, "r");
   if (file == NULL) {
     ESP_LOGE(TAG, "Failed to open file for reading");
     return ret;
   }
+  ret = ESP_OK;
 
   return ret;
 }
@@ -92,8 +103,12 @@ bool LittleFS::close_file(FILE *file) {
   return ret;
 }
 
-uint8_t LittleFS::read_chunk(FILE *file, uint32_t offset, uint32_t size) {
+bool LittleFS::read_chunk(FILE *file, uint32_t offset, uint32_t size, char *buf) {
   esp_err_t ret = ESP_FAIL;
+
+  // buf = (char *) malloc(sizeof(char) * size);
+  fseek(file, 0, offset);
+  int readsize = fread(buf, 1, size, file);
 
   return ret;
 }

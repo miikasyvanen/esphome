@@ -90,9 +90,6 @@ class ComponentIterator {
 #ifdef USE_UPDATE
   virtual bool on_update(update::UpdateEntity *update) = 0;
 #endif
-#ifdef USE_STORAGE
-  virtual bool on_storage(storage::Storage *storage) = 0;
-#endif
   virtual bool on_end();
 
  protected:
@@ -169,9 +166,6 @@ class ComponentIterator {
 #endif
 #ifdef USE_UPDATE
     UPDATE,
-#endif
-#ifdef USE_STORAGE
-    STORAGE,
 #endif
     MAX,
   };

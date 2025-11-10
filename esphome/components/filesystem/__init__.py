@@ -13,37 +13,37 @@ from esphome.core.entity_helpers import setup_entity
 CODEOWNERS = ["@miikasyvanen"]
 IS_PLATFORM_COMPONENT = True
 
-storage_ns = cg.esphome_ns.namespace("storage")
-Storage = storage_ns.class_("storage", cg.EntityBase)
-StoragePtr = Storage.operator("ptr")
+filesystem_ns = cg.esphome_ns.namespace("filesystem")
+Filesystem = filesystem_ns.class_("filesystem", cg.EntityBase)
+FilesystemPtr = Filesystem.operator("ptr")
 
-STORAGE_SCHEMA = cv.All(
+FILESYSTEM_SCHEMA = cv.All(
     cv.Schema(
         {
-            cv.Required(CONF_ID): cv.use_id(Storage),
+            cv.Required(CONF_ID): cv.use_id(Filesystem),
         }
     ),
 )
 
 
-async def setup_storage_core_(var, config):
-    await setup_entity(var, config, "storage")
+async def setup_filesystem_core_(var, config):
+    await setup_entity(var, config, "filesystem")
 
 
-async def register_storage(var, config):
+async def register_filesystem(var, config):
     if not CORE.has_id(config[CONF_ID]):
         var = cg.Pvariable(config[CONF_ID], var)
-    cg.add(cg.App.register_storage(var))
-    CORE.register_platform_component("storage", var)
-    await setup_storage_core_(var, config)
+    cg.add(cg.App.register_filesystem(var))
+    CORE.register_platform_component("filesystem", var)
+    await setup_filesystem_core_(var, config)
 
 
-async def new_storage(config, *args):
+async def new_filesystem(config, *args):
     var = cg.new_Pvariable(config[CONF_ID], *args)
-    await register_storage(var, config)
+    await register_filesystem(var, config)
     return var
 
 
 @coroutine_with_priority(CoroPriority.CORE)
 async def to_code(config):
-    cg.add_global(storage_ns.using)
+    cg.add_global(filesystem_ns.using)

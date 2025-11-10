@@ -9,19 +9,19 @@
 namespace esphome {
 namespace littlefs {
 
-class LittleFS : public Component {
+class LittleFS : public esphome::storage::Storage {
  public:
   LittleFS();
 
   void setup();
   void loop();
 
-  bool mount_partition(std::string partition);
-  bool format_partition(std::string partition);
-  bool open_file(std::string filename, FILE *file);
-  bool close_file(FILE *file);
-  uint8_t read_chunk(FILE *file, uint32_t offset, uint32_t size);
-  bool write(FILE *file, uint32_t offset, uint32_t size);
+  bool mount_partition(std::string partition, std::string label) override;
+  bool format_partition(std::string partition, std::string label) override;
+  bool open_file(std::string filename, FILE **file) override;
+  bool close_file(FILE *file) override;
+  bool read_chunk(FILE *file, uint32_t offset, uint32_t size, char *buf) override;
+  bool write(FILE *file, uint32_t offset, uint32_t size) override;
 
  protected:
   LittleFS *littlefs_;

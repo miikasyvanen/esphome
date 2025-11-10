@@ -175,12 +175,6 @@ void ComponentIterator::advance() {
       break;
 #endif
 
-#ifdef USE_STORAGE
-    case IteratorState::STORAGE:
-      this->process_platform_item_(App.get_storages(), &ComponentIterator::on_storage);
-      break;
-#endif
-
     case IteratorState::MAX:
       if (this->on_end()) {
         this->state_ = IteratorState::NONE;

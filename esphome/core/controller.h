@@ -64,9 +64,6 @@
 #ifdef USE_UPDATE
 #include "esphome/components/update/update_entity.h"
 #endif
-#ifdef USE_STORAGE
-#include "esphome/components/storage/storage.h"
-#endif
 
 namespace esphome {
 
@@ -132,9 +129,6 @@ class Controller {
 #endif
 #ifdef USE_UPDATE
   virtual void on_update(update::UpdateEntity *obj){};
-#endif
-#ifdef USE_STORAGE
-  virtual void on_storage(storage::Storage *obj){};
 #endif
 };
 
