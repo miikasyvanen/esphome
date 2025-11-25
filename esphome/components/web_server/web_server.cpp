@@ -36,6 +36,10 @@
 #endif
 #endif
 
+#ifdef USE_CAPTIVE_PORTAL
+#include "esphome/components/captive_portal/captive_portal.h"
+#endif
+
 namespace esphome {
 namespace web_server {
 
@@ -271,6 +275,16 @@ void DeferredUpdateEventSourceList::on_client_disconnect_(DeferredUpdateEventSou
 
 WebServer::WebServer(web_server_base::WebServerBase *base) : base_(base) {}
 
+void WebServer::add_html_file(const char *filename) {
+  std::string delimiter = "/";
+  std::string s = filename;
+  size_t pos = s.find(delimiter);
+  s.erase(0, pos);
+  html_files_list_.push_back(s);
+}
+
+void WebServer::set_dashboard_url(const char *dashboard_url) { this->dashboard_url_ = dashboard_url; }
+
 #ifdef USE_WEBSERVER_CSS_INCLUDE
 void WebServer::set_css_include(const char *css_include) { this->css_include_ = css_include; }
 #endif
@@ -296,6 +310,8 @@ std::string WebServer::get_config_json() {
 }
 
 void WebServer::setup() {
+  global_web_server = this;
+  this->setup_controller(this->include_internal_);
   ControllerRegistry::register_controller(this);
   this->base_->init();
 
@@ -320,6 +336,52 @@ void WebServer::setup() {
   // doesn't need defer functionality - if the queue is full, the client JS knows it's alive because it's clearly
   // getting a lot of events
   this->set_interval(10000, [this]() { this->events_.try_send_nodefer("", "ping", millis(), 30000); });
+
+  static struct file_server_data *server_data = NULL;
+
+  // Initialize LittleFS
+  ESP_LOGI(TAG, "Initializing LittleFS");
+
+  esp_vfs_littlefs_conf_t conf = {
+      .base_path = "/littlefs",
+      .partition_label = "littlefs",
+      .format_if_mount_failed = true,
+      .dont_mount = false,
+  };
+
+  esp_err_t ret = ESP_FAIL;
+
+  uint8_t littlefs_try_count = 0;
+  // Use settings defined above to initialize and mount LittleFS filesystem.
+  // Note: esp_vfs_littlefs_register is an all-in-one convenience function.
+  while (ret != ESP_OK && littlefs_try_count < 5) {
+    ESP_LOGI(TAG, "Mounting LittleFS");
+    ret = esp_vfs_littlefs_register(&conf);
+
+    if (ret != ESP_OK) {
+      if (ret == ESP_FAIL) {
+        ESP_LOGE(TAG, "Failed to mount or format filesystem");
+      } else if (ret == ESP_ERR_NOT_FOUND) {
+        ESP_LOGE(TAG, "Failed to find LittleFS partition");
+      } else {
+        ESP_LOGE(TAG, "Failed to initialize LittleFS (%s)", esp_err_to_name(ret));
+      }
+      // return;
+    }
+    littlefs_try_count++;
+  }
+  if (ret == ESP_OK)
+    ESP_LOGI(TAG, "LittleFS mounted succesfully");
+  else
+    ESP_LOGE(TAG, "Failed to mount LittleFS!");
+
+  size_t total = 0, used = 0;
+  ret = esp_littlefs_info(conf.partition_label, &total, &used);
+  if (ret != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to get LittleFS partition information (%s)", esp_err_to_name(ret));
+  } else {
+    ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
+  }
 }
 void WebServer::loop() { this->events_.loop(); }
 void WebServer::dump_config() {
@@ -329,6 +391,72 @@ void WebServer::dump_config() {
                 network::get_use_address(), this->base_->get_port());
 }
 float WebServer::get_setup_priority() const { return setup_priority::WIFI - 1.0f; }
+
+void WebServer::handle_custom_request(AsyncWebServerRequest *request) {
+  FILE *pFile;
+  unsigned long lSize;
+  // char *buffer;
+  char *chunk;
+  size_t result;
+
+  const auto &url = request->url();
+
+  ESP_LOGI(TAG, "Requested file: %s", url.c_str());
+
+  uint8_t filename_len = strlen("/littlefs") + strlen(url.c_str()) + 1;
+  // If url is "/", add 'index.html' to it
+  if (url == "/")
+    filename_len += 10;
+
+  char filename[filename_len];
+  // filename = (char*)malloc(filename_len);
+  strcpy(filename, "/littlefs");
+  strcat(filename, url.c_str());
+  if (url == "/")
+    strcat(filename, "index.html");
+
+  ESP_LOGI(TAG, "File to open: %s", filename);
+
+  request->set_content_type_from_file(request, filename);
+
+  pFile = fopen(filename, "r");
+
+  if (pFile == NULL) {
+    ESP_LOGE(TAG, "File error");
+  }
+
+  if (pFile) {
+    // obtain file size:
+    fseek(pFile, 0, SEEK_END);
+    lSize = ftell(pFile);
+    rewind(pFile);
+
+    ESP_LOGI(TAG, "File size: %lu", lSize);
+
+    // allocate memory to contain the whole file:
+    chunk = (char *) malloc(sizeof(char) * 8192);
+    if (chunk == NULL) {
+      ESP_LOGE(TAG, "Memory error");
+    }
+
+    size_t chunksize;
+    do {
+      /* Read file in chunks into the scratch buffer */
+      chunksize = fread(chunk, 1, SCRATCH_BUFSIZE, pFile);
+
+      request->sendChunk(request, chunk, chunksize);
+
+      /* Keep looping till the whole file is sent */
+    } while (chunksize != 0);
+    request->sendChunk(request, chunk, 0);
+
+    /* Close file after sending complete */
+    fclose(pFile);
+    ESP_LOGI(TAG, "File %s sent succesfully", filename);
+
+    free(chunk);
+  }
+}
 
 #ifdef USE_WEBSERVER_LOCAL
 void WebServer::handle_index_request(AsyncWebServerRequest *request) {
@@ -1771,6 +1899,23 @@ bool WebServer::canHandle(AsyncWebServerRequest *request) const {
   const auto &url = request->url();
   const auto method = request->method();
 
+  // Custom URL checks
+#ifndef USE_CUSTOM_WEBPAGE
+  if (url == dashboard_url_)
+    return true;
+#else
+  if (url == "/")
+    return true;
+
+  size_t html_files_count = this->html_files_list_.size();
+  for (int i = 0; i < html_files_count; i++) {
+    // ESP_LOGI(TAG, "Check file: '%s'", this->html_files_list_.at(i).c_str());
+    if (url == this->html_files_list_.at(i).c_str()) {
+      return true;
+    }
+  }
+#endif
+
   // Static URL checks
   static const char *const STATIC_URLS[] = {
     "/",
@@ -1793,6 +1938,12 @@ bool WebServer::canHandle(AsyncWebServerRequest *request) const {
 #ifdef USE_WEBSERVER_PRIVATE_NETWORK_ACCESS
   if (method == HTTP_OPTIONS && request->hasHeader(HEADER_CORS_REQ_PNA))
     return true;
+#endif
+
+#ifdef USE_CAPTIVE_PORTAL
+  if (captive_portal::global_captive_portal->canHandle(request)) {
+    return true;
+  }
 #endif
 
   // Parse URL for component checks
@@ -1896,6 +2047,28 @@ bool WebServer::canHandle(AsyncWebServerRequest *request) const {
 void WebServer::handleRequest(AsyncWebServerRequest *request) {
   const auto &url = request->url();
 
+  // Handle custom routes first
+#ifndef USE_CUSTOM_WEBPAGE
+  if (url == dashboard_url_) {
+    this->handle_index_request(request);
+    return;
+  }
+#else
+  if (url == "/") {
+    this->handle_custom_request(request);
+    return;
+  }
+
+  size_t html_files_count = this->html_files_list_.size();
+  for (int i = 0; i < html_files_count; i++) {
+    // ESP_LOGI(TAG, "Check file: '%s'", this->html_files_list_.at(i).c_str());
+    if (url == this->html_files_list_.at(i).c_str()) {
+      this->handle_custom_request(request);
+      return;
+    }
+  }
+#endif
+
   // Handle static routes first
   if (url == "/") {
     this->handle_index_request(request);
@@ -1905,6 +2078,19 @@ void WebServer::handleRequest(AsyncWebServerRequest *request) {
 #if !defined(USE_ESP32) && defined(USE_ARDUINO)
   if (url == "/events") {
     this->events_.add_new_client(this, request);
+    return;
+  }
+#endif
+
+#ifdef USE_CAPTIVE_PORTAL
+  if (request->url() == captive_portal::global_captive_portal->getCaptivePortalPath()) {
+    captive_portal::global_captive_portal->handleRequest(request);
+    return;
+  } else if (request->url() == "/wifisave") {
+    captive_portal::global_captive_portal->handle_wifisave(request);
+    return;
+  } else if (request->url() == "/config.json") {
+    captive_portal::global_captive_portal->handle_config(request);
     return;
   }
 #endif
@@ -2034,6 +2220,8 @@ void WebServer::add_sorting_group(uint64_t group_id, const std::string &group_na
   this->sorting_groups_[group_id] = SortingGroup{group_name, weight};
 }
 #endif
+
+WebServer *global_web_server = nullptr;  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 }  // namespace web_server
 }  // namespace esphome

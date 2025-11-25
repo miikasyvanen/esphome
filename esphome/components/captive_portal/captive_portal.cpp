@@ -10,6 +10,16 @@ namespace captive_portal {
 
 static const char *const TAG = "captive_portal";
 
+void CaptivePortal::handle_captive_portal(AsyncWebServerRequest *request) {
+#ifndef USE_ESP8266
+  auto *response = request->beginResponse(200, "text/html", INDEX_GZ, sizeof(INDEX_GZ));
+#else
+  auto *response = request->beginResponse_P(200, "text/html", INDEX_GZ, sizeof(INDEX_GZ));
+#endif
+  response->addHeader("Content-Encoding", "gzip");
+  request->send(response);
+}
+
 void CaptivePortal::handle_config(AsyncWebServerRequest *request) {
   AsyncResponseStream *stream = request->beginResponseStream(ESPHOME_F("application/json"));
   stream->addHeader(ESPHOME_F("cache-control"), ESPHOME_F("public, max-age=0, must-revalidate"));
@@ -24,6 +34,9 @@ void CaptivePortal::handle_config(AsyncWebServerRequest *request) {
 #else
   stream->printf(R"({"mac":"%s","name":"%s","aps":[{})", mac_str, App.get_name().c_str());
 #endif
+  bool passive_scan = request->url() == "/" ? false : true;
+
+  wifi::global_wifi_component->start_scanning(passive_scan);
 
   for (auto &scan : wifi::global_wifi_component->get_scan_result()) {
     if (scan.get_is_hidden())
@@ -57,11 +70,26 @@ void CaptivePortal::handle_wifisave(AsyncWebServerRequest *request) {
   request->redirect(ESPHOME_F("/?save"));
 }
 
+void CaptivePortal::handleRequest(AsyncWebServerRequest *req) {
+  if (req->url() == this->portal_path_) {
+    this->handle_captive_portal(req);
+    return;
+  } else if (req->url() == "/config.json") {
+    this->handle_config(req);
+    return;
+  } else if (req->url() == "/wifisave") {
+    this->handle_wifisave(req);
+    return;
+  }
+}
+
 void CaptivePortal::setup() {
   // Disable loop by default - will be enabled when captive portal starts
   this->disable_loop();
 }
-void CaptivePortal::start() {
+void CaptivePortal::start(const String portal_path) {
+  ESP_LOGV(TAG, "Starting Captive Portal using path: %s", portal_path.c_str());
+  this->portal_path_ = portal_path;
   this->base_->init();
   if (!this->initialized_) {
     this->base_->add_handler(this);
@@ -75,6 +103,7 @@ void CaptivePortal::start() {
 
   network::IPAddress ip = wifi::global_wifi_component->wifi_soft_ap_ip();
 
+#ifdef USE_WIFI_AP
 #ifdef USE_ESP_IDF
   // Create DNS server instance for ESP-IDF
   this->dns_server_ = make_unique<DNSServer>();
@@ -85,7 +114,7 @@ void CaptivePortal::start() {
   this->dns_server_->setErrorReplyCode(DNSReplyCode::NoError);
   this->dns_server_->start(53, ESPHOME_F("*"), ip);
 #endif
-
+#endif  // USE_WIFI_AP
   this->initialized_ = true;
   this->active_ = true;
 

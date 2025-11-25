@@ -14,8 +14,11 @@
 #include "esphome/components/web_server_base/web_server_base.h"
 
 namespace esphome {
-
 namespace captive_portal {
+
+const char WEB_SERVER_CAPTIVE_PORTAL_PATH[] = "/fallback";
+
+enum Mode { MODE_ALWAYS_ACTIVE, MODE_AP_ONLY };
 
 class CaptivePortal : public AsyncWebHandler, public Component {
  public:
@@ -35,7 +38,9 @@ class CaptivePortal : public AsyncWebHandler, public Component {
 #endif
   }
   float get_setup_priority() const override;
-  void start();
+  void start(const String path);
+  void setMode(Mode _mode) { this->mode = _mode; }
+  String getCaptivePortalPath() { return portal_path_; }
   bool is_active() const { return this->active_; }
   void end() {
     this->active_ = false;
@@ -51,23 +56,33 @@ class CaptivePortal : public AsyncWebHandler, public Component {
     }
   }
 
-  bool canHandle(AsyncWebServerRequest *request) const override {
-    // Handle all GET requests when captive portal is active
-    // This allows us to respond with the portal page for any URL,
-    // triggering OS captive portal detection
-    return this->active_ && request->method() == HTTP_GET;
+  bool canHandle(AsyncWebServerRequest *request) {  // override {
+    if (!this->active_)
+      return false;
+
+    if (request->method() == HTTP_GET) {
+      if (request->url() == this->portal_path_)
+        return true;
+      if (request->url() == "/config.json")
+        return true;
+      if (request->url() == "/wifisave")
+        return true;
+    }
+    return false;
   }
 
+  void handle_captive_portal(AsyncWebServerRequest *request);
   void handle_config(AsyncWebServerRequest *request);
-
   void handle_wifisave(AsyncWebServerRequest *request);
-
   void handleRequest(AsyncWebServerRequest *req) override;
+
+  Mode mode{MODE_AP_ONLY};
 
  protected:
   web_server_base::WebServerBase *base_;
   bool initialized_{false};
   bool active_{false};
+  String portal_path_{};
 #if defined(USE_ARDUINO) || defined(USE_ESP_IDF)
   std::unique_ptr<DNSServer> dns_server_{nullptr};
 #endif

@@ -118,6 +118,8 @@ class AsyncWebServerRequest {
 
   void redirect(const std::string &url);
 
+  esp_err_t set_content_type_from_file(AsyncWebServerRequest *request, const char *filename);
+  esp_err_t sendChunk(AsyncWebServerRequest *request, const char *chunk, size_t chunksize);
   void send(AsyncWebServerResponse *response);
   void send(int code, const char *content_type = nullptr, const char *content = nullptr);
   // NOLINTNEXTLINE(readability-identifier-naming)

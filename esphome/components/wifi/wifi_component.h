@@ -59,6 +59,8 @@ namespace esphome::wifi {
 /// Sentinel value for RSSI when WiFi is not connected
 static constexpr int8_t WIFI_RSSI_DISCONNECTED = -127;
 
+enum Mode { MODE_ALWAYS_ACTIVE, MODE_FALLBACK };
+
 struct SavedWifiSettings {
   char ssid[33];
   char password[65];
@@ -253,6 +255,9 @@ class WiFiComponent : public Component {
   WiFiAP get_sta() const;
   void init_sta(size_t count);
   void add_sta(const WiFiAP &ap);
+  //void clear_sta();
+  void setMode(Mode _mode) { this->mode = _mode; }
+  Mode mode{MODE_FALLBACK};
   void clear_sta() {
     this->sta_.clear();
     this->selected_sta_index_ = -1;
@@ -268,13 +273,16 @@ class WiFiComponent : public Component {
    */
   void set_ap(const WiFiAP &ap);
   WiFiAP get_ap() { return this->ap_; }
+  void start_ap();
+  void stop_ap();
   void set_ap_timeout(uint32_t ap_timeout) { ap_timeout_ = ap_timeout; }
 #endif  // USE_WIFI_AP
 
   void enable();
   void disable();
+  void disconnect();
   bool is_disabled();
-  void start_scanning();
+  void start_scanning(bool passive = false);
   void check_scanning_finished();
   void start_connecting(const WiFiAP &ap);
   // Backward compatibility overload - ignores 'two' parameter
@@ -495,6 +503,7 @@ class WiFiComponent : public Component {
   void wifi_pre_setup_();
   WiFiSTAConnectStatus wifi_sta_connect_status_();
   bool wifi_scan_start_(bool passive);
+  void print_scan_result_();
 
 #ifdef USE_WIFI_AP
   bool wifi_ap_ip_config_(const optional<ManualIP> &manual_ip);
@@ -585,6 +594,7 @@ class WiFiComponent : public Component {
   bool error_from_callback_{false};
   bool scan_done_{false};
   bool ap_setup_{false};
+  bool ap_active_{false};
   bool passive_scan_{false};
   bool has_saved_wifi_settings_{false};
 #ifdef USE_WIFI_11KV_SUPPORT

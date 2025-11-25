@@ -112,6 +112,8 @@ void ModbusController::on_modbus_read_registers(uint8_t function_code, uint16_t 
            "0x%X.",
            this->address_, function_code, start_address, number_of_registers);
 
+  func_code = function_code;
+
   if (number_of_registers == 0 || number_of_registers > modbus::MAX_NUM_OF_REGISTERS_TO_READ) {
     ESP_LOGW(TAG, "Invalid number of registers %d. Sending exception response.", number_of_registers);
     this->send_error(function_code, ModbusExceptionCode::ILLEGAL_DATA_ADDRESS);

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gzip
+import os
 
 import esphome.codegen as cg
 from esphome.components import web_server_base
@@ -10,7 +11,11 @@ from esphome.const import (
     CONF_AUTH,
     CONF_CSS_INCLUDE,
     CONF_CSS_URL,
+    CONF_CUSTOM_WEBPAGE,
+    CONF_DASHBOARD_URL,
     CONF_ENABLE_PRIVATE_NETWORK_ACCESS,
+    CONF_HTML_FILES,
+    CONF_HTML_FILES_PATH,
     CONF_ID,
     CONF_INCLUDE_INTERNAL,
     CONF_JS_INCLUDE,
@@ -41,6 +46,7 @@ CONF_SORTING_GROUP_ID = "sorting_group_id"
 CONF_SORTING_GROUPS = "sorting_groups"
 CONF_SORTING_WEIGHT = "sorting_weight"
 
+VALID_INCLUDE_EXTS = {".html", ".css", ".js", ".png", ".ico"}
 
 web_server_ns = cg.esphome_ns.namespace("web_server")
 WebServer = web_server_ns.class_("WebServer", cg.Component, cg.Controller)
@@ -137,6 +143,18 @@ def _final_validate_sorting(config: ConfigType) -> ConfigType:
 FINAL_VALIDATE_SCHEMA = _final_validate_sorting
 
 
+def validate_html_file(value):
+    # html_files_path
+    # Uncomment next line to check that file exists in dir
+    value = "data/" + value
+    file = cv.file_(value)
+    _, ext = os.path.splitext(file)
+    if ext not in VALID_INCLUDE_EXTS:
+        raise cv.Invalid(
+            f"Include has invalid file extension {ext} - valid extensions are {', '.join(VALID_INCLUDE_EXTS)}"
+        )
+    return value
+  
 def _consume_web_server_sockets(config: ConfigType) -> ConfigType:
     """Register socket needs for web_server component."""
     from esphome.components import socket
@@ -179,10 +197,16 @@ CONFIG_SCHEMA = cv.All(
             cv.GenerateID(): cv.declare_id(WebServer),
             cv.Optional(CONF_PORT, default=80): cv.port,
             cv.Optional(CONF_VERSION, default=2): cv.one_of(1, 2, 3, int=True),
+            cv.Optional(CONF_CUSTOM_WEBPAGE, default=False): cv.boolean,
+            cv.Optional(CONF_DASHBOARD_URL, default="/"): cv.string,
             cv.Optional(CONF_CSS_URL): cv.string,
             cv.Optional(CONF_CSS_INCLUDE): cv.file_,
             cv.Optional(CONF_JS_URL): cv.string,
             cv.Optional(CONF_JS_INCLUDE): cv.file_,
+            cv.Optional(CONF_HTML_FILES_PATH, default="data/"): cv.string,
+            cv.Optional(CONF_HTML_FILES, default=[]): cv.ensure_list(
+                validate_html_file
+            ),
             cv.Optional(CONF_ENABLE_PRIVATE_NETWORK_ACCESS, default=True): cv.boolean,
             cv.Optional(CONF_AUTH): cv.Schema(
                 {
@@ -298,6 +322,9 @@ async def to_code(config):
     cg.add_define("USE_WEBSERVER")
     cg.add_define("USE_WEBSERVER_PORT", config[CONF_PORT])
     cg.add_define("USE_WEBSERVER_VERSION", version)
+    if config[CONF_CUSTOM_WEBPAGE]:
+        cg.add_define("USE_CUSTOM_WEBPAGE")
+    cg.add(var.set_dashboard_url(config[CONF_DASHBOARD_URL]))
     if version >= 2:
         # Don't compress the index HTML as the data sizes are almost the same.
         add_resource_as_progmem("INDEX_HTML", build_index_html(config), compress=False)
@@ -334,6 +361,10 @@ async def to_code(config):
     if (sorting_group_config := config.get(CONF_SORTING_GROUPS)) is not None:
         cg.add_define("USE_WEBSERVER_SORTING")
         add_sorting_groups(var, sorting_group_config)
+
+    if config[CONF_HTML_FILES]:
+        for html_file in config[CONF_HTML_FILES]:
+            cg.add(var.add_html_file(str(html_file)))
 
 
 def FILTER_SOURCE_FILES() -> list[str]:

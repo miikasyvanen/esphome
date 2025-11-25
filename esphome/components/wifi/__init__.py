@@ -32,6 +32,7 @@ from esphome.const import (
     CONF_IDENTITY,
     CONF_KEY,
     CONF_MANUAL_IP,
+    CONF_MODE,
     CONF_NETWORKS,
     CONF_ON_CONNECT,
     CONF_ON_DISCONNECT,
@@ -180,12 +181,21 @@ WIFI_NETWORK_BASE = cv.Schema(
     }
 )
 
+mode = wifi_ns.enum("Mode")
+Modes = {
+    "ALWAYS_ACTIVE": mode.MODE_ALWAYS_ACTIVE,
+    "FALLBACK": mode.MODE_FALLBACK,
+}
+
 CONF_AP_TIMEOUT = "ap_timeout"
 WIFI_NETWORK_AP = WIFI_NETWORK_BASE.extend(
     {
         cv.Optional(
             CONF_AP_TIMEOUT, default=DEFAULT_AP_TIMEOUT
         ): cv.positive_time_period_milliseconds,
+        cv.Optional(CONF_MODE, default="FALLBACK"): cv.enum(
+            Modes, upper=True, space="_"
+        ),
     }
 )
 
@@ -468,6 +478,11 @@ async def to_code(config):
         )
         cg.add(var.set_ap_timeout(conf[CONF_AP_TIMEOUT]))
         cg.add_define("USE_WIFI_AP")
+        if CONF_MODE in conf:
+            cg.add(var.setMode(conf[CONF_MODE]))
+            if conf[CONF_MODE] == "ALWAYS_ACTIVE":
+                cg.add_define("USE_WIFI_AP_MODE_ALWAYS_ACTIVE")
+
     elif CORE.is_esp32 and CORE.using_esp_idf:
         add_idf_sdkconfig_option("CONFIG_ESP_WIFI_SOFTAP_SUPPORT", False)
         add_idf_sdkconfig_option("CONFIG_LWIP_DHCPS", False)
