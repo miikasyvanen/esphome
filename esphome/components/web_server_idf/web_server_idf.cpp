@@ -1,9 +1,10 @@
-#ifdef USE_ESP_IDF
+#ifdef USE_ESP32
 
 #include <cstdarg>
 #include <memory>
 #include <cstring>
 #include <cctype>
+#include <cinttypes>
 
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
@@ -86,10 +87,45 @@ int nonblocking_send(httpd_handle_t hd, int sockfd, const char *buf, size_t buf_
 }
 }  // namespace
 
+void AsyncWebServer::safe_close_with_shutdown(httpd_handle_t hd, int sockfd) {
+  // CRITICAL: Shut down receive BEFORE closing to prevent lwIP race conditions
+  //
+  // The race condition occurs because close() initiates lwIP teardown while
+  // the TCP/IP thread can still receive packets, causing assertions when
+  // recv_tcp() sees partially-torn-down state.
+  //
+  // By shutting down receive first, we tell lwIP to stop accepting new data BEFORE
+  // the teardown begins, eliminating the race window. We only shutdown RD (not RDWR)
+  // to allow the FIN packet to be sent cleanly during close().
+  //
+  // Note: This function may be called with an already-closed socket if the network
+  // stack closed it. In that case, shutdown() will fail but close() is safe to call.
+  //
+  // See: https://github.com/esphome/esphome-webserver/issues/163
+
+  // Attempt shutdown - ignore errors as socket may already be closed
+  shutdown(sockfd, SHUT_RD);
+
+  // Always close - safe even if socket is already closed by network stack
+  close(sockfd);
+}
+
 void AsyncWebServer::end() {
   if (this->server_) {
     httpd_stop(this->server_);
     this->server_ = nullptr;
+  }
+}
+
+void AsyncWebServer::set_lru_purge_enable(bool enable) {
+  if (this->lru_purge_enable_ == enable) {
+    return;  // No change needed
+  }
+  this->lru_purge_enable_ = enable;
+  // If server is already running, restart it with new config
+  if (this->server_) {
+    this->end();
+    this->begin();
   }
 }
 
@@ -100,6 +136,10 @@ void AsyncWebServer::begin() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.server_port = this->port_;
   config.uri_match_fn = [](const char * /*unused*/, const char * /*unused*/, size_t /*unused*/) { return true; };
+  // Enable LRU purging if requested (e.g., by captive portal to handle probe bursts)
+  config.lru_purge_enable = this->lru_purge_enable_;
+  // Use custom close function that shuts down before closing to prevent lwIP race conditions
+  config.close_fn = AsyncWebServer::safe_close_with_shutdown;
   if (httpd_start(&this->server_, &config) == ESP_OK) {
     const httpd_uri_t handler_get = {
         .uri = "",
@@ -204,8 +244,8 @@ esp_err_t AsyncWebServer::request_handler_(AsyncWebServerRequest *request) const
 
 AsyncWebServerRequest::~AsyncWebServerRequest() {
   delete this->rsp_;
-  for (const auto &pair : this->params_) {
-    delete pair.second;  // NOLINT(cppcoreguidelines-owning-memory)
+  for (auto *param : this->params_) {
+    delete param;  // NOLINT(cppcoreguidelines-owning-memory)
   }
 }
 
@@ -296,14 +336,28 @@ void AsyncWebServerRequest::send(int code, const char *content_type, const char 
 void AsyncWebServerRequest::redirect(const std::string &url) {
   httpd_resp_set_status(*this, "302 Found");
   httpd_resp_set_hdr(*this, "Location", url.c_str());
+  httpd_resp_set_hdr(*this, "Connection", "close");
   httpd_resp_send(*this, nullptr, 0);
 }
 
 void AsyncWebServerRequest::init_response_(AsyncWebServerResponse *rsp, int code, const char *content_type) {
-  httpd_resp_set_status(*this, code == 200   ? HTTPD_200
-                               : code == 404 ? HTTPD_404
-                               : code == 409 ? HTTPD_409
-                                             : to_string(code).c_str());
+  // Set status code - use constants for common codes, default to 500 for unknown codes
+  const char *status;
+  switch (code) {
+    case 200:
+      status = HTTPD_200;
+      break;
+    case 404:
+      status = HTTPD_404;
+      break;
+    case 409:
+      status = HTTPD_409;
+      break;
+    default:
+      status = HTTPD_500;
+      break;
+  }
+  httpd_resp_set_status(*this, status);
 
   if (content_type && *content_type) {
     httpd_resp_set_type(*this, content_type);
@@ -360,11 +414,14 @@ void AsyncWebServerRequest::requestAuthentication(const char *realm) const {
 #endif
 
 AsyncWebParameter *AsyncWebServerRequest::getParam(const std::string &name) {
-  auto find = this->params_.find(name);
-  if (find != this->params_.end()) {
-    return find->second;
+  // Check cache first - only successful lookups are cached
+  for (auto *param : this->params_) {
+    if (param->name() == name) {
+      return param;
+    }
   }
 
+  // Look up value from query strings
   optional<std::string> val = query_key_value(this->post_query_, name);
   if (!val.has_value()) {
     auto url_query = request_get_url_query(*this);
@@ -373,11 +430,14 @@ AsyncWebParameter *AsyncWebServerRequest::getParam(const std::string &name) {
     }
   }
 
-  AsyncWebParameter *param = nullptr;
-  if (val.has_value()) {
-    param = new AsyncWebParameter(val.value());  // NOLINT(cppcoreguidelines-owning-memory)
+  // Don't cache misses to avoid wasting memory when handlers check for
+  // optional parameters that don't exist in the request
+  if (!val.has_value()) {
+    return nullptr;
   }
-  this->params_.insert({name, param});
+
+  auto *param = new AsyncWebParameter(name, val.value());  // NOLINT(cppcoreguidelines-owning-memory)
+  this->params_.push_back(param);
   return param;
 }
 
@@ -385,7 +445,13 @@ void AsyncWebServerResponse::addHeader(const char *name, const char *value) {
   httpd_resp_set_hdr(*this->req_, name, value);
 }
 
-void AsyncResponseStream::print(float value) { this->print(to_string(value)); }
+void AsyncResponseStream::print(float value) {
+  // Use stack buffer to avoid temporary string allocation
+  // Size: sign (1) + digits (10) + decimal (1) + precision (6) + exponent (5) + null (1) = 24, use 32 for safety
+  char buf[32];
+  int len = snprintf(buf, sizeof(buf), "%f", value);
+  this->content_.append(buf, len);
+}
 
 void AsyncResponseStream::printf(const char *fmt, ...) {
   va_list args;
@@ -417,24 +483,25 @@ void AsyncEventSource::handleRequest(AsyncWebServerRequest *request) {
   if (this->on_connect_) {
     this->on_connect_(rsp);
   }
-  this->sessions_.insert(rsp);
+  this->sessions_.push_back(rsp);
 }
 
 void AsyncEventSource::loop() {
   // Clean up dead sessions safely
   // This follows the ESP-IDF pattern where free_ctx marks resources as dead
   // and the main loop handles the actual cleanup to avoid race conditions
-  auto it = this->sessions_.begin();
-  while (it != this->sessions_.end()) {
-    auto *ses = *it;
+  for (size_t i = 0; i < this->sessions_.size();) {
+    auto *ses = this->sessions_[i];
     // If the session has a dead socket (marked by destroy callback)
     if (ses->fd_.load() == 0) {
       ESP_LOGD(TAG, "Removing dead event source session");
-      it = this->sessions_.erase(it);
       delete ses;  // NOLINT(cppcoreguidelines-owning-memory)
+      // Remove by swapping with last element (O(1) removal, order doesn't matter for sessions)
+      this->sessions_[i] = this->sessions_.back();
+      this->sessions_.pop_back();
     } else {
       ses->loop();
-      ++it;
+      ++i;
     }
   }
 }
@@ -449,6 +516,9 @@ void AsyncEventSource::try_send_nodefer(const char *message, const char *event, 
 
 void AsyncEventSource::deferrable_send_state(void *source, const char *event_type,
                                              message_generator_t *message_generator) {
+  // Skip if no connected clients to avoid unnecessary processing
+  if (this->empty())
+    return;
   for (auto *ses : this->sessions_) {
     if (ses->fd_.load() != 0) {  // Skip dead sessions
       ses->deferrable_send_state(source, event_type, message_generator);
@@ -514,10 +584,12 @@ AsyncEventSourceResponse::AsyncEventSourceResponse(const AsyncWebServerRequest *
 
 void AsyncEventSourceResponse::destroy(void *ptr) {
   auto *rsp = static_cast<AsyncEventSourceResponse *>(ptr);
-  ESP_LOGD(TAG, "Event source connection closed (fd: %d)", rsp->fd_.load());
-  // Mark as dead by setting fd to 0 - will be cleaned up in the main loop
-  rsp->fd_.store(0);
+  int fd = rsp->fd_.exchange(0);  // Atomically get and clear fd
+  ESP_LOGD(TAG, "Event source connection closed (fd: %d)", fd);
+  // Mark as dead - will be cleaned up in the main loop
   // Note: We don't delete or remove from set here to avoid race conditions
+  // httpd will call our custom close_fn (safe_close_with_shutdown) which handles
+  // shutdown() before close() to prevent lwIP race conditions
 }
 
 // helper for allowing only unique entries in the queue
@@ -527,8 +599,7 @@ void AsyncEventSourceResponse::deq_push_back_with_dedup_(void *source, message_g
   // Use range-based for loop instead of std::find_if to reduce template instantiation overhead and binary size
   for (auto &event : this->deferred_queue_) {
     if (event == item) {
-      event = item;
-      return;
+      return;  // Already in queue, no need to update since items are equal
     }
   }
   this->deferred_queue_.push_back(item);
@@ -627,16 +698,19 @@ bool AsyncEventSourceResponse::try_send_nodefer(const char *message, const char 
 
   event_buffer_.append(chunk_len_header);
 
+  // Use stack buffer for formatting numeric fields to avoid temporary string allocations
+  // Size: "retry: " (7) + max uint32 (10 digits) + CRLF (2) + null (1) = 20 bytes, use 32 for safety
+  constexpr size_t num_buf_size = 32;
+  char num_buf[num_buf_size];
+
   if (reconnect) {
-    event_buffer_.append("retry: ", sizeof("retry: ") - 1);
-    event_buffer_.append(to_string(reconnect));
-    event_buffer_.append(CRLF_STR, CRLF_LEN);
+    int len = snprintf(num_buf, num_buf_size, "retry: %" PRIu32 CRLF_STR, reconnect);
+    event_buffer_.append(num_buf, len);
   }
 
   if (id) {
-    event_buffer_.append("id: ", sizeof("id: ") - 1);
-    event_buffer_.append(to_string(id));
-    event_buffer_.append(CRLF_STR, CRLF_LEN);
+    int len = snprintf(num_buf, num_buf_size, "id: %" PRIu32 CRLF_STR, id);
+    event_buffer_.append(num_buf, len);
   }
 
   if (event && *event) {
@@ -798,4 +872,4 @@ esp_err_t AsyncWebServer::handle_multipart_upload_(httpd_req_t *r, const char *c
 }  // namespace web_server_idf
 }  // namespace esphome
 
-#endif  // !defined(USE_ESP_IDF)
+#endif  // !defined(USE_ESP32)

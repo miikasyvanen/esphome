@@ -42,7 +42,19 @@ class CaptivePortal : public AsyncWebHandler, public Component {
   void setMode(Mode _mode) { this->mode = _mode; }
   String getCaptivePortalPath() { return portal_path_; }
   bool is_active() const { return this->active_; }
-  void end();
+  void end() {
+    this->active_ = false;
+    this->disable_loop();  // Stop processing DNS requests
+#ifdef USE_ESP32
+    // Disable LRU socket purging now that captive portal is done
+    this->base_->get_server()->set_lru_purge_enable(false);
+#endif
+    this->base_->deinit();
+    if (this->dns_server_ != nullptr) {
+      this->dns_server_->stop();
+      this->dns_server_ = nullptr;
+    }
+  }
 
   bool canHandle(AsyncWebServerRequest *request) {  // override {
     if (!this->active_)

@@ -154,6 +154,16 @@ def validate_html_file(value):
             f"Include has invalid file extension {ext} - valid extensions are {', '.join(VALID_INCLUDE_EXTS)}"
         )
     return value
+  
+def _consume_web_server_sockets(config: ConfigType) -> ConfigType:
+    """Register socket needs for web_server component."""
+    from esphome.components import socket
+
+    # Web server needs 1 listening socket + typically 2 concurrent client connections
+    # (browser makes 2 connections for page + event stream)
+    sockets_needed = 3
+    socket.consume_sockets(sockets_needed, "web_server")(config)
+    return config
 
 
 sorting_group = {
@@ -231,6 +241,7 @@ CONFIG_SCHEMA = cv.All(
     validate_local,
     validate_sorting_groups,
     validate_ota,
+    _consume_web_server_sockets,
 )
 
 
@@ -301,6 +312,9 @@ async def to_code(config):
 
     var = cg.new_Pvariable(config[CONF_ID], paren)
     await cg.register_component(var, config)
+
+    # Track controller registration for StaticVector sizing
+    CORE.register_controller()
 
     version = config[CONF_VERSION]
 
