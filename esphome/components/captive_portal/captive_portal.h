@@ -38,9 +38,9 @@ class CaptivePortal : public AsyncWebHandler, public Component {
 #endif
   }
   float get_setup_priority() const override;
-  void start(const String path);
+  void start(const std::string path);
   void setMode(Mode _mode) { this->mode = _mode; }
-  String getCaptivePortalPath() { return portal_path_; }
+  std::string getCaptivePortalPath() { return portal_path_; }
   bool is_active() const { return this->active_; }
   void end() {
     this->active_ = false;
@@ -82,7 +82,7 @@ class CaptivePortal : public AsyncWebHandler, public Component {
   web_server_base::WebServerBase *base_;
   bool initialized_{false};
   bool active_{false};
-  String portal_path_{};
+  std::string portal_path_{};
 #if defined(USE_ARDUINO) || defined(USE_ESP_IDF)
   std::unique_ptr<DNSServer> dns_server_{nullptr};
 #endif

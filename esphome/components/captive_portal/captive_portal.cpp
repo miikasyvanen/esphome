@@ -69,7 +69,7 @@ void CaptivePortal::handle_wifisave(AsyncWebServerRequest *request) {
   this->defer([ssid, psk]() { wifi::global_wifi_component->save_wifi_sta(ssid, psk); });
   request->redirect(ESPHOME_F("/?save"));
 }
-
+/*
 void CaptivePortal::handleRequest(AsyncWebServerRequest *req) {
   if (req->url() == this->portal_path_) {
     this->handle_captive_portal(req);
@@ -82,12 +82,12 @@ void CaptivePortal::handleRequest(AsyncWebServerRequest *req) {
     return;
   }
 }
-
+*/
 void CaptivePortal::setup() {
   // Disable loop by default - will be enabled when captive portal starts
   this->disable_loop();
 }
-void CaptivePortal::start(const String portal_path) {
+void CaptivePortal::start(const std::string portal_path) {
   ESP_LOGV(TAG, "Starting Captive Portal using path: %s", portal_path.c_str());
   this->portal_path_ = portal_path;
   this->base_->init();
@@ -125,7 +125,10 @@ void CaptivePortal::start(const String portal_path) {
 }
 
 void CaptivePortal::handleRequest(AsyncWebServerRequest *req) {
-  if (req->url() == ESPHOME_F("/config.json")) {
+  if (req->url() == this->portal_path_) {
+    this->handle_captive_portal(req);
+    return;
+  } else if (req->url() == ESPHOME_F("/config.json")) {
     this->handle_config(req);
     return;
   } else if (req->url() == ESPHOME_F("/wifisave")) {

@@ -447,6 +447,8 @@ void WiFiComponent::start() {
 #endif
     }
 #endif
+#endif
+
 #ifdef USE_WIFI_AP
   } else if (this->has_ap()) {
     this->start_ap();
@@ -675,6 +677,7 @@ void WiFiComponent::setup_ap_config_() {
                   manual_ip->static_ip.str().c_str(), manual_ip->gateway.str().c_str(),
                   manual_ip->subnet.str().c_str());
   }
+#endif
 }
 
 void WiFiComponent::set_ap(const WiFiAP &ap) {

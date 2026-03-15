@@ -17,7 +17,7 @@ namespace modbus_controller {
 class ModbusController;
 
 static uint8_t func_code = 0;
-
+/*
 enum class ModbusFunctionCode {
   CUSTOM = 0x00,
   READ_COILS = 0x01,
@@ -46,7 +46,7 @@ enum class ModbusRegisterType : uint8_t {
   DISCRETE_INPUT = 0x02,
   HOLDING = 0x03,
   READ = 0x04,
-};
+};*/
 using modbus::ModbusFunctionCode;
 using modbus::ModbusRegisterType;
 using modbus::ModbusExceptionCode;

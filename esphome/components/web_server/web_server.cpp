@@ -310,10 +310,12 @@ std::string WebServer::get_config_json() {
 }
 
 void WebServer::setup() {
-  global_web_server = this;
-  this->setup_controller(this->include_internal_);
   ControllerRegistry::register_controller(this);
   this->base_->init();
+  /*global_web_server = this;
+  this->setup_controller(this->include_internal_);
+  ControllerRegistry::register_controller(this);
+  this->base_->init();*/
 
 #ifdef USE_LOGGER
   if (logger::global_logger != nullptr && this->expose_log_) {
