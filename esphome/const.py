@@ -1121,6 +1121,7 @@ CONF_Y = "y"
 CONF_Y_GRID = "y_grid"
 CONF_YEAR = "year"
 CONF_ZERO = "zero"
+CONF_ZERO_CROSSINGS = "zero_crossings"
 
 TYPE_GIT = "git"
 TYPE_LOCAL = "local"
